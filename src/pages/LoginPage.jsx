@@ -19,14 +19,14 @@ export default function LoginPage() {
   const { language, setLanguage, t } = useLanguage();
   const [sitePassword, setSitePasswordInput] = useState("");
   const [modPassword, setModPasswordInput] = useState("");
-  const [guildId, setGuildId] = useState("");
+  const [guildId, setGuildId] = useState("1456455515088617524");
   const [loading, setLoading] = useState(false);
   const [siteUnlocked, setSiteUnlocked] = useState(
     () => !!localStorage.getItem("timeaway_site_access")
   );
 
   useEffect(() => {
-    const urlGuildId = searchParams.get("guild_id") || searchParams.get("server");
+    const urlGuildId = searchParams.get("guild_id") || searchParams.get("server") || "1456455515088617524";
     if (urlGuildId) {
       setGuildId(urlGuildId);
       localStorage.setItem("timeaway_guild_id", urlGuildId);
