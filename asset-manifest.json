@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/AleHecaNieMaMniev2/static/css/main.44d0bf8c.css",
+    "main.js": "/AleHecaNieMaMniev2/static/js/main.49681b09.js",
+    "index.html": "/AleHecaNieMaMniev2/index.html",
+    "main.44d0bf8c.css.map": "/AleHecaNieMaMniev2/static/css/main.44d0bf8c.css.map",
+    "main.49681b09.js.map": "/AleHecaNieMaMniev2/static/js/main.49681b09.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.44d0bf8c.css",
+    "static/js/main.49681b09.js"
+  ]
+}
