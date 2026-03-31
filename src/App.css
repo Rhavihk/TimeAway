@@ -7,15 +7,15 @@
 
 /* Login background - dark hellish */
 .login-bg {
-    background: 
-        radial-gradient(ellipse at bottom, rgba(139, 37, 0, 0.15) 0%, transparent 60%),
-        radial-gradient(ellipse at top right, rgba(218, 165, 32, 0.05) 0%, transparent 40%),
-        linear-gradient(180deg, #0a0705 0%, #150c08 50%, #0a0705 100%);
+    background-image: url("https://firebasestorage.googleapis.com/v0/b/timeaway-22254.firebasestorage.app/o/strona%20t%C5%82o.png?alt=media&token=7e030e71-5509-450c-96da-62b17ac08360");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     background-attachment: fixed;
 }
 
 .login-overlay {
-    background: radial-gradient(ellipse at center, rgba(20, 12, 8, 0.7) 0%, rgba(5, 3, 2, 0.95) 100%);
+    background: radial-gradient(ellipse at center, rgba(10, 6, 4, 0.55) 0%, rgba(5, 3, 2, 0.75) 100%);
 }
 
 /* Sidebar styles - stone/dark metal look */
