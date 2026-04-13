@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/TimeAway/static/css/main.43b6895e.css",
-    "main.js": "/TimeAway/static/js/main.ea4959b5.js",
+    "main.css": "/TimeAway/static/css/main.50396563.css",
+    "main.js": "/TimeAway/static/js/main.c3dc6dcb.js",
     "index.html": "/TimeAway/index.html",
-    "main.43b6895e.css.map": "/TimeAway/static/css/main.43b6895e.css.map",
-    "main.ea4959b5.js.map": "/TimeAway/static/js/main.ea4959b5.js.map"
+    "main.50396563.css.map": "/TimeAway/static/css/main.50396563.css.map",
+    "main.c3dc6dcb.js.map": "/TimeAway/static/js/main.c3dc6dcb.js.map"
   },
   "entrypoints": [
-    "static/css/main.43b6895e.css",
-    "static/js/main.ea4959b5.js"
+    "static/css/main.50396563.css",
+    "static/js/main.c3dc6dcb.js"
   ]
 }
