@@ -119,7 +119,7 @@ export default function DashboardPage() {
 
   const handleDeleteAbsence = async (absenceId) => {
     try {
-      await deleteAbsence(absenceId, user.discord_id);
+      await deleteAbsence(absenceId, user.discord_id, user.guild_nickname || user.username);
       toast.success(t("absencePurged"));
       loadAbsences();
     } catch { toast.error(t("failedToPurge")); }

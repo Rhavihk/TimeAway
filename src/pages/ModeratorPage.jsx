@@ -13,11 +13,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Flame, ChevronLeft, ChevronRight, LogOut, Shield, Users, Settings,
+  Flame, ChevronLeft, ChevronRight, LogOut, Shield, Users, Settings, BookOpen,
   Eye, EyeOff, Skull, Trash2, Crown, Globe,
 } from "lucide-react";
 import { getModPassword, setModAccess } from "@/App";
 import { useLanguage } from "@/contexts/LanguageContext";
+import AuditLogModal from "@/pages/AuditLogModal";
 import {
   getAllUsers, getAllAbsences, moderatorDeleteAbsence,
   updateSitePassword, updateModeratorPassword,
@@ -49,6 +50,7 @@ export default function ModeratorPage() {
   const [sitePassword, setSitePassword] = useState("");
   const [newModPassword, setNewModPassword] = useState("");
   const [showPasswords, setShowPasswords] = useState(false);
+  const [showAuditLog, setShowAuditLog] = useState(false);
   const modPassword = getModPassword();
   const DAYS = language === "pl" ? DAYS_PL : DAYS_EN;
 
@@ -76,7 +78,7 @@ export default function ModeratorPage() {
   const handleDeleteAbsence = async (absenceId, username) => {
     if (!confirm(`${t("purgeConfirm")} ${username}?`)) return;
     try {
-      await moderatorDeleteAbsence(absenceId);
+      await moderatorDeleteAbsence(absenceId, "Nadzorca");
       toast.success(t("absencePurged"));
       fetchData();
     } catch { toast.error(t("failedToPurge")); }
@@ -215,6 +217,10 @@ export default function ModeratorPage() {
             <Settings className="w-4 h-4 mr-2" />{t("sigilSettings")}
           </Button>
           <Button variant="ghost" className="w-full justify-start text-amber-900/80 hover:text-amber-500 hover:bg-transparent"
+            onClick={() => setShowAuditLog(true)} data-testid="audit-log-btn">
+              <BookOpen className="w-4 h-4 mr-2" />Dziennik zdarzeń
+            </Button>
+            <Button variant="ghost" className="w-full justify-start text-amber-900/80 hover:text-amber-500 hover:bg-transparent"
             onClick={handleLogout} data-testid="mod-logout-btn">
             <LogOut className="w-4 h-4 mr-2" />{t("leaveSanctum")}
           </Button>
@@ -341,6 +347,7 @@ export default function ModeratorPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    <AuditLogModal open={showAuditLog} onClose={() => setShowAuditLog(false)} />
     </div>
   );
 }

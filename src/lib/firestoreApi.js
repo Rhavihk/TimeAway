@@ -1,19 +1,6 @@
-// Firestore-based API — replaces the FastAPI backend
-// All data lives in Firestore; Discord OAuth goes through a Firebase Function
-
 import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  serverTimestamp,
-  setDoc,
+  collection, doc, getDoc, getDocs, addDoc, updateDoc,
+  deleteDoc, query, where, orderBy, serverTimestamp, setDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -24,7 +11,6 @@ const SETTINGS_DOC = "config/settings";
 export async function getSettings() {
   const snap = await getDoc(doc(db, SETTINGS_DOC));
   if (!snap.exists()) {
-    // First run: create defaults
     const defaults = { site_password: "timeaway123", moderator_password: "mod123" };
     await setDoc(doc(db, SETTINGS_DOC), defaults);
     return defaults;
@@ -54,7 +40,19 @@ export async function updateModeratorPassword(currentPassword, newPassword) {
   await updateDoc(doc(db, SETTINGS_DOC), { moderator_password: newPassword });
 }
 
-// ─── User (stored after Discord OAuth) ───────────────────────────────────────
+// ─── Audit log ───────────────────────────────────────────────────────────────
+
+async function writeAuditLog(action, performedBy, targetUsername, absenceDetails) {
+  await addDoc(collection(db, "audit_logs"), {
+    action,           // "user_deleted_own" | "moderator_deleted"
+    performed_by: performedBy,   // username osoby która usunęła
+    target_username: targetUsername, // czyja nieobecność
+    absence_details: absenceDetails, // { start_date, end_date, reason }
+    timestamp: serverTimestamp(),
+  });
+}
+
+// ─── Users ───────────────────────────────────────────────────────────────────
 
 export async function getUser(userId) {
   const snap = await getDoc(doc(db, "users", userId));
@@ -66,7 +64,6 @@ export async function getAllUsers() {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-// Called by the Firebase Function after Discord OAuth → upserts user doc
 export async function upsertUser(userData) {
   const ref = doc(db, "users", userData.discord_id);
   await setDoc(ref, { ...userData, updated_at: serverTimestamp() }, { merge: true });
@@ -111,35 +108,53 @@ export async function updateAbsence(absenceId, userId, startDate, endDate, reaso
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error("Absence not found");
   if (snap.data().user_id !== userId) throw new Error("Not authorized");
-  await updateDoc(ref, {
-    start_date: startDate,
-    end_date: endDate,
-    reason: reason || null,
-  });
+  await updateDoc(ref, { start_date: startDate, end_date: endDate, reason: reason || null });
 }
 
-export async function deleteAbsence(absenceId, userId) {
+export async function deleteAbsence(absenceId, userId, username) {
   const ref = doc(db, "absences", absenceId);
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error("Absence not found");
   if (snap.data().user_id !== userId) throw new Error("Not authorized");
+  const data = snap.data();
+  await writeAuditLog(
+    "user_deleted_own",
+    username,
+    data.username,
+    { start_date: data.start_date, end_date: data.end_date, reason: data.reason }
+  );
   await deleteDoc(ref);
 }
 
-export async function moderatorDeleteAbsence(absenceId) {
-  await deleteDoc(doc(db, "absences", absenceId));
+export async function moderatorDeleteAbsence(absenceId, moderatorUsername) {
+  const ref = doc(db, "absences", absenceId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("Absence not found");
+  const data = snap.data();
+  await writeAuditLog(
+    "moderator_deleted",
+    moderatorUsername,
+    data.username,
+    { start_date: data.start_date, end_date: data.end_date, reason: data.reason }
+  );
+  await deleteDoc(ref);
 }
 
-// ─── Session helpers (stored in localStorage, verified against Firestore) ────
-// We store the discord_id in localStorage as the "session" — no server sessions needed.
-// The Firebase Function writes a short-lived token doc; we verify it here.
+// ─── Audit logs ───────────────────────────────────────────────────────────────
+
+export async function getAuditLogs() {
+  const q = query(collection(db, "audit_logs"), orderBy("timestamp", "desc"));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+// ─── Auth tokens ─────────────────────────────────────────────────────────────
 
 export async function consumeAuthToken(token) {
   const ref = doc(db, "auth_tokens", token);
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error("Invalid or expired token");
   const data = snap.data();
-  // Delete token so it can only be used once
   await deleteDoc(ref);
-  return data; // { discord_id, username, avatar, guild_nickname, guild_id }
+  return data;
 }

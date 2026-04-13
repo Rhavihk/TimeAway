@@ -1,70 +1,64 @@
 const { onRequest } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const fetch = require("node-fetch");
 const crypto = require("crypto");
+const nacl = require("tweetnacl");
 
 initializeApp();
 const db = getFirestore();
 
-/**
- * Discord OAuth callback handler.
- *
- * Flow:
- *  1. Discord redirects here with ?code=...&state=<guild_id>
- *  2. We exchange code for access_token
- *  3. We fetch Discord user + guild member info
- *  4. We write a one-time auth_token doc to Firestore
- *  5. We redirect the browser to the GitHub Pages frontend with ?token=<token>
- *
- * Required env vars (set via `firebase functions:secrets:set` or .env):
- *   DISCORD_CLIENT_ID
- *   DISCORD_CLIENT_SECRET
- *   FRONTEND_URL  → e.g. https://YOURUSERNAME.github.io/REPONAME
- */
+// ─── Discord OAuth callback ───────────────────────────────────────────────────
 exports.discordCallback = onRequest(
-  { secrets: ["DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET"], cors: true },
+  { secrets: ["DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET", "FRONTEND_URL"], cors: true },
   async (req, res) => {
     const { code, state } = req.query;
     const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
     const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
-    const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
-    // The redirect_uri must EXACTLY match what's registered in Discord dev portal
-    const REDIRECT_URI =
-      process.env.FUNCTIONS_URL + "/discordCallback" ||
-      `https://us-central1-${process.env.GCLOUD_PROJECT}.cloudfunctions.net/discordCallback`;
+    const FRONTEND_URL = process.env.FRONTEND_URL || "https://rhavihk.github.io/TimeAway";
+    const REDIRECT_URI = "https://us-central1-timeaway-22254.cloudfunctions.net/discordCallback";
+
+    console.log("=== Discord Callback ===");
+    console.log("code:", code ? "present" : "missing");
+    console.log("FRONTEND_URL:", FRONTEND_URL);
 
     if (!code) {
-      return res.redirect(`${FRONTEND_URL}/auth/callback?error=no_code`);
+      return res.redirect(`${FRONTEND_URL}/#/auth/callback?error=no_code`);
     }
 
     try {
-      // 1. Exchange code for token
+      const tokenBody = new URLSearchParams({
+        client_id: DISCORD_CLIENT_ID,
+        client_secret: DISCORD_CLIENT_SECRET,
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: REDIRECT_URI,
+      });
+
       const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          client_id: DISCORD_CLIENT_ID,
-          client_secret: DISCORD_CLIENT_SECRET,
-          grant_type: "authorization_code",
-          code,
-          redirect_uri: REDIRECT_URI,
-        }),
+        body: tokenBody,
       });
-      if (!tokenRes.ok) throw new Error("Token exchange failed");
-      const { access_token } = await tokenRes.json();
 
-      // 2. Fetch Discord user
+      const tokenText = await tokenRes.text();
+      console.log("Token response status:", tokenRes.status);
+
+      if (!tokenRes.ok) {
+        throw new Error(`Token exchange failed: ${tokenRes.status} - ${tokenText}`);
+      }
+
+      const { access_token } = JSON.parse(tokenText);
+
       const userRes = await fetch("https://discord.com/api/users/@me", {
         headers: { Authorization: `Bearer ${access_token}` },
       });
       if (!userRes.ok) throw new Error("Failed to fetch Discord user");
       const discordUser = await userRes.json();
 
-      // 3. Fetch guild nickname if guild_id provided
       const guildId = state && state !== "no_guild" ? state : null;
-      let guildNickname =
-        discordUser.global_name || discordUser.username;
+      let guildNickname = discordUser.global_name || discordUser.username;
 
       if (guildId) {
         try {
@@ -74,17 +68,11 @@ exports.discordCallback = onRequest(
           );
           if (memberRes.ok) {
             const member = await memberRes.json();
-            guildNickname =
-              member.nick ||
-              discordUser.global_name ||
-              discordUser.username;
+            guildNickname = member.nick || discordUser.global_name || discordUser.username;
           }
-        } catch (_) {
-          // ignore — use fallback nickname
-        }
+        } catch (_) {}
       }
 
-      // 4. Write one-time auth token to Firestore (TTL 5 min)
       const token = crypto.randomBytes(32).toString("hex");
       const userData = {
         discord_id: discordUser.id,
@@ -97,13 +85,82 @@ exports.discordCallback = onRequest(
       };
       await db.collection("auth_tokens").doc(token).set(userData);
 
-      // 5. Redirect to frontend
-      res.redirect(`${FRONTEND_URL}/auth/callback?token=${token}`);
+      res.redirect(`${FRONTEND_URL}/#/auth/callback?token=${token}`);
     } catch (err) {
-      console.error("Discord OAuth error:", err);
-      res.redirect(
-        `${FRONTEND_URL}/auth/callback?error=${encodeURIComponent(err.message)}`
-      );
+      console.error("Discord OAuth error:", err.message);
+      res.redirect(`${FRONTEND_URL}/#/auth/callback?error=${encodeURIComponent(err.message)}`);
     }
   }
 );
+
+// ─── Discord Slash Command (/zgłoś) ──────────────────────────────────────────
+exports.discordSlash = onRequest(
+  { secrets: ["DISCORD_PUBLIC_KEY", "FRONTEND_URL"], cors: false },
+  async (req, res) => {
+    const DISCORD_PUBLIC_KEY = process.env.DISCORD_PUBLIC_KEY;
+    const FRONTEND_URL = process.env.FRONTEND_URL || "https://rhavihk.github.io/TimeAway";
+
+    const signature = req.headers["x-signature-ed25519"];
+    const timestamp = req.headers["x-signature-timestamp"];
+    const rawBody = JSON.stringify(req.body);
+
+    try {
+      const isValid = nacl.sign.detached.verify(
+        Buffer.from(timestamp + rawBody),
+        Buffer.from(signature, "hex"),
+        Buffer.from(DISCORD_PUBLIC_KEY, "hex")
+      );
+      if (!isValid) return res.status(401).send("Invalid signature");
+    } catch (e) {
+      return res.status(401).send("Invalid signature");
+    }
+
+    const { type, data } = req.body;
+
+    if (type === 1) return res.json({ type: 1 });
+
+    if (type === 2 && data?.name === "zgłoś") {
+      return res.json({
+        type: 4,
+        data: {
+          content: `📅 **TimeAway — Zgłoś nieobecność**\n\nKliknij poniższy link aby zgłosić swoją nieobecność na kalendarzu:\n👉 ${FRONTEND_URL}\n\n*Link widoczny tylko dla Ciebie*`,
+          flags: 64,
+        },
+      });
+    }
+
+    return res.status(400).json({ error: "Unknown interaction type" });
+  }
+);
+
+// ─── Scheduled cleanup ────────────────────────────────────────────────────────
+exports.cleanupExpiredAbsences = onSchedule("every 1 hours", async () => {
+  const now = new Date();
+
+  // Usuń nieobecności starsze niż 24h
+  const absenceCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const absenceCutoffStr = absenceCutoff.toISOString().split("T")[0];
+
+  const absenceSnap = await db.collection("absences")
+    .where("end_date", "<", absenceCutoffStr).get();
+
+  if (!absenceSnap.empty) {
+    const batch = db.batch();
+    absenceSnap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+    console.log(`Cleanup absences: usunięto ${absenceSnap.docs.length}`);
+  }
+
+  // Usuń audit logi starsze niż 7 dni
+  const logCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  const logSnap = await db.collection("audit_logs")
+    .where("timestamp", "<", logCutoff).get();
+
+  if (!logSnap.empty) {
+    const batch2 = db.batch();
+    logSnap.docs.forEach((d) => batch2.delete(d.ref));
+    await batch2.commit();
+    console.log(`Cleanup audit_logs: usunięto ${logSnap.docs.length}`);
+  }
+});
