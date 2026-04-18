@@ -5,7 +5,6 @@ import {
   format, startOfMonth, endOfMonth, eachDayOfInterval,
   isSameMonth, isSameDay, addMonths, subMonths, isWithinInterval, parseISO,
 } from "date-fns";
-import { pl } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -21,6 +20,9 @@ import {
 } from "@/lib/firestoreApi";
 
 const DAYS_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const MONTHS_PL = ["Styczeń","Luty","Marzec","Kwiecień","Maj","Czerwiec","Lipiec","Sierpień","Wrzesień","Październik","Listopad","Grudzień"];
+const MONTHS_EN = null; // use date-fns default
 const DAYS_PL = ["Ndz", "Pon", "Wt", "Śr", "Czw", "Pt", "Sob"];
 
 const ABSENCE_COLORS = [
@@ -276,7 +278,7 @@ export default function DashboardPage() {
               <ChevronLeft className="w-5 h-5" />
             </Button>
             <h2 className="text-3xl font-bold font-cinzel tracking-wide" style={{ color: "#DAA520", textShadow: "0 0 15px rgba(218,165,32,0.3)" }}>
-              {format(currentMonth, "LLLL yyyy", { locale: language === "pl" ? pl : undefined })}
+              {language === "pl" ? `${MONTHS_PL[currentMonth.getMonth()]} ${currentMonth.getFullYear()}` : format(currentMonth, "MMMM yyyy")}
             </h2>
             <Button variant="ghost" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
               className="text-amber-600 hover:text-amber-400 hover:bg-amber-900/20" data-testid="next-month-btn">
