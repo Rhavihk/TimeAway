@@ -71,7 +71,7 @@ function App() {
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </HashRouter>
-        <Toaster position="top-right" theme="dark" />
+        <Toaster position="top-center" theme="dark" />
       </div>
     </LanguageProvider>
   );
